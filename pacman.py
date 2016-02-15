@@ -19,6 +19,29 @@ def draw_background(scr, img=None):
         bg.fill((128, 128, 128))
         scr.blit(bg, (0, 0))
 
+#FIXME загружать карту из файла. Легенда: X-неразрушаемая O-разрушаемая стена
+# . - точка (съедобно)
+# 1-9 доп артефакты за разрушаемой стеной или просто на пути
+
+class Map:
+        def __init__(self, w, h):
+                self.map = [ [list()]*x for i in range(y) ]
+
+        # Функция возвращает список обьектов в данной точке карты
+        def get(self, x, y):
+                return self.map[x][y]
+
+        # Функция, перемещающая произвольный обьект в новую точку, будет выглядеть так:
+        def moveTo(self, obj, new_x, new_y):
+                point = self.map[obj.x][obj.y]
+                if obj in point:
+                        point.remove(obj)
+                        self.map[new_x][new_y].add(obj)
+                        obj.set_ccord(x,y)
+                        return true
+                return false
+
+
 
 class GameObject(pygame.sprite.Sprite):
     def __init__(self, img, x, y, tile_size, map_size):
