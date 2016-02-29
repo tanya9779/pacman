@@ -19,86 +19,29 @@ def draw_background(scr, img=None):
         bg.fill((128, 128, 128))
         scr.blit(bg, (0, 0))
 
-# класс Карта хранит все стены, все артефакты за стенами и вкусняшки (белые шарики везде)
-# загружать карту из файла. Легенда: X-неразрушаемая O-разрушаемая стена
+#FIXME загружать карту из файла. Легенда: X-неразрушаемая O-разрушаемая стена
+# . - точка (съедобно)
 # 1-9 доп артефакты за разрушаемой стеной или просто на пути
 # Класс будет рисовать стены (2-х типов) и др.
-# потом на карту методом set ставятся привидения и Пакман
 
 class Map:
         def __init__(self, w, h):
-            self.map = [ [list()]*w for i in range(h) ] # каждая ячейка это список объектов
-            self.point_count = 0
-            self.bonus_count = 0
-            # загрузим карту из файла
-            in_f=open('map.txt','r')
-            s=in_f.readline().rstrip()
-            i=0
-            while len(s)>0:
-                for j in range(len(s)):
-                    if s[j]=='X': # неразрушаемая стена
-                        obj = Wall(i, j, tile_size, map_size)
-                        obj.set_solid(True) # неразрушаемая
-                        self.map[i][j] = [ obj ]
-                    elif s[j]=='O': # разрушаемая стена
-                        obj = Wall(i, j, tile_size, map_size)
-                        self.map[i][j] = [ obj ]
-                    elif '123456789'.count(s[j]) > 0: # Бонусный артефакт
-                        obj = Bonus(i, j, tile_size, map_size)
-                        self.map[i][j] = [ obj ]
-                        self.bonus_count+=1
-                    else: # на все свободные места насыпем белые шарики
-                        obj = Ball(i, j, tile_size, map_size)
-                        self.map[i][j] = [ obj ]
-                        self.point_count+=1
-
-                # читаем след строку из файла
-                s=in_f.readline().rstrip()
-                i+=1
-            in_f.close()
+                self.map = [ [list()]*x for i in range(y) ]
 
         # Функция возвращает список обьектов в данной точке карты
         def get(self, x, y):
-                return self.map[floor(x)][floor(y)]
+                return self.map[x][y]
 
-        # ф-ция первоначальной установки Пакмана и приведений на карту - на стены и друг на друга не ставить
-        def set(self, obj, new_x, new_y):
-            n_point = self.map[new_x][new_y]
-            # проверим, можно ли сюда поставить
-            for obj2 in n_point:
-                if isinstance(obj2, Wall) or isinstance(obj2,Bonus): # здесь стена или кто-то еще
-                    return False
-                # объект поместим в нужную клетку
-            n_point.append(obj)
-            obj.set_coord(new_x,new_y)
-            return True
-
-        # Функция, перемещающая произвольный обьект в новую точку
-        # если нельзя поставить в указ точку, возвращает False
+        # Функция, перемещающая произвольный обьект в новую точку, будет выглядеть так:
         def moveTo(self, obj, new_x, new_y):
-                point = self.map[floor(obj.x)][floor(obj.y)]
+                point = self.map[obj.x][obj.y]
                 if obj in point:
-                        n_point = self.map[floor(new_x)][floor(new_y)]
-                        # проверим, можно ли сюда поставить
-                        for obj2 in n_point:
-                            if isinstance(obj2, Wall): # это стена
-                                if obj2.is_solid() or isinstance(obj, Ghost):
-                                    return False # здесь неразрушаемая стена или ты приведение
-                                elif isinstance(obj, Pacman): # Pacman может разрушить
-                                    n_point.remove(obj2) # удаляем стену
-                                    break
-                        point.remove(obj) # вытащим объект из прежней клетки карты и поместим в новую
-                        n_point.append(obj)
-                        obj.set_coord(new_x,new_y)
-                        return True
-                return False
+                        point.remove(obj)
+                        self.map[new_x][new_y].add(obj)
+                        obj.set_ccord(x,y)
+                        return true
+                return false
 
-        def draw(self,scr):
-            for i in range(len(self.map)):
-                for j in range(len(self.map[i])):
-                    li=self.map[i][j]
-                    for obj in li:
-                        obj.draw(scr)
 
 
 class GameObject(pygame.sprite.Sprite):
@@ -109,26 +52,10 @@ class GameObject(pygame.sprite.Sprite):
         self.x = 0
         self.y = 0
         self.tick = 0
-        self.health = 0
         self.tile_size = tile_size
         self.map_size = map_size
         self.set_coord(x, y)
 
-    def getHealth(self):
-        return self.health
-
-    def is_alive(self):
-        return self.health > 0
-
-    def attack(self, target):
-        if self.health < target.getHealth():
-            target.attack(self)
-        else:
-            self.health -= target.health
-            target.health = 0
-
-
-    # особенность - x,y с плавающей точкой
     def set_coord(self, x, y):
         self.x = x
         self.y = y
@@ -144,159 +71,63 @@ class GameObject(pygame.sprite.Sprite):
 class Ghost(GameObject):
     def __init__(self, x, y, tile_size, map_size):
         GameObject.__init__(self, './resources/ghost.png', x, y, tile_size, map_size)
-        self.health = 1000
         self.direction = 0
         self.velocity = 4.0 / 10.0
 
     def game_tick(self):
         super(Ghost, self).game_tick()
-        new_x = self.x
-        new_y = self.y
-        if self.tick % random.randint(3,13) == 0 or self.direction == 0:
+        if self.tick % 20 == 0 or self.direction == 0:
             self.direction = random.randint(1, 4)
 
-        while True:
-            if self.direction == 1:
-                new_x = self.x + self.velocity
-                if new_x >= self.map_size-1:
-                    new_x = self.map_size-1
-                    self.direction = random.randint(1, 4)
-            elif self.direction == 2:
-                new_y = self.y + self.velocity
-                if new_y >= self.map_size-1:
-                    new_y = self.map_size-1
-                    self.direction = random.randint(1, 4)
-            elif self.direction == 3:
-                new_x = self.x - self.velocity
-                if new_x <= 0:
-                    new_x = 0
-                    self.direction = random.randint(1, 4)
-            elif self.direction == 4:
-                new_y = self.y - self.velocity
-                if new_y <= 0:
-                    new_y = 0
-                    self.direction = random.randint(1, 4)
-
-            if floor(self.x)!=floor(new_x) or floor(self.y)!=floor(new_y):
-                # если это уже переход в другую клетку
-                if map.moveTo(self, new_x, new_y ): # проверка, не мешает ли стена
-                    # проверим, нет ли здесь пакмана
-                    point = map.get(new_x, new_y)
-                    for obj in point: # в клетке могут оказаться разные объекты
-                        if isinstance(obj,Pacman):
-                            if self.health>=obj.getHealth():
-                                self.attack(obj)
-                                point.remove(obj) # это конец - приведение сожрало пакмана
-                            else:
-                                obj.attack(self)
-                                point.remove(self) # пакман съел это привидение
-                    break # выход из while
-                else: # не удалось передвинуться - поменяем направление
-                    new_x = self.x
-                    new_y = self.y
-                    self.direction = random.randint(1,4)
-            else: # маленький шаг в пределах клетки
-                self.x = new_x
-                self.y = new_y
-                break # выход из while
-
+        if self.direction == 1:
+            self.x += self.velocity
+            if self.x >= self.map_size-1:
+                self.x = self.map_size-1
+                self.direction = random.randint(1, 4)
+        elif self.direction == 2:
+            self.y += self.velocity
+            if self.y >= self.map_size-1:
+                self.y = self.map_size-1
+                self.direction = random.randint(1, 4)
+        elif self.direction == 3:
+            self.x -= self.velocity
+            if self.x <= 0:
+                self.x = 0
+                self.direction = random.randint(1, 4)
+        elif self.direction == 4:
+            self.y -= self.velocity
+            if self.y <= 0:
+                self.y = 0
+                self.direction = random.randint(1, 4)
+        self.set_coord(self.x, self.y)
 
 
 class Pacman(GameObject):
     def __init__(self, x, y, tile_size, map_size):
         GameObject.__init__(self, './resources/pacman.png', x, y, tile_size, map_size)
-        self.health = 500
         self.direction = 0
         self.velocity = 4.0 / 10.0
-        self.energy = 0
 
-    def draw(self, scr):
-        scr.blit(pygame.transform.rotate(self.image,90*(1-self.direction)), (self.screen_rect.x, self.screen_rect.y))
-
-
-    # вызывается с каждым "тактом" игры
     def game_tick(self):
         super(Pacman, self).game_tick()
-        new_x = self.x
-        new_y = self.y
-
         if self.direction == 1:
-            new_x = self.x + self.velocity
-            if new_x >= self.map_size-1:
-                new_x = self.map_size-1
+            self.x += self.velocity
+            if self.x >= self.map_size-1:
+                self.x = self.map_size-1
         elif self.direction == 2:
-            new_y = self.y + self.velocity
-            if new_y >= self.map_size-1:
-                new_y = self.map_size-1
+            self.y += self.velocity
+            if self.y >= self.map_size-1:
+                self.y = self.map_size-1
         elif self.direction == 3:
-            new_x = self.x - self.velocity
-            if new_x <= 0:
-                new_x = 0
+            self.x -= self.velocity
+            if self.x <= 0:
+                self.x = 0
         elif self.direction == 4:
-            new_y = self.y - self.velocity
-            if new_x <= 0:
-                new_y = 0
+            self.y -= self.velocity
+            if self.y <= 0:
+                self.y = 0
 
-        if floor(self.x)!=floor(new_x) or floor(self.y)!=floor(new_y):
-            # шаг дробный, поэтому не каждый раз перемещаемся в другую клетку
-            if map.moveTo(self, new_x, new_y ): # если стены не мешают передвинуться
-                point = map.get(new_x, new_y)
-                ball = None
-                bonus = None
-                ghost = None
-                for obj in point: # в клетке могут оказаться разные объекты
-                    if isinstance(obj,Ball):
-                        ball = obj
-                        self.health+=ball.getHealth()
-                    elif isinstance(obj,Bonus):
-                        bonus = obj
-                        self.health+=bonus.getHealth()
-                    elif isinstance(obj,Ghost):
-                        ghost = obj
-                        if self.health>=ghost.getHealth():
-                            self.attack(ghost)
-                        else:
-                            ghost.attack(self) # это конец - приведение сожрало пакмана
-                if ball is not None:
-                    point.remove(ball)
-                    map.point_count-=1
-                if bonus is not None:
-                    point.remove(bonus)
-                    map.bonus_count-=1
-                if self.is_alive() and ghost is not None:
-                    point.remove(ghost)
-        else:
-            self.x = new_x
-            self.y = new_y
-
-
-class Wall(GameObject):
-    def __init__(self, x, y, tile_size, map_size):
-        GameObject.__init__(self, './resources/wall.png', x, y, tile_size, map_size)
-        self.direction = 0
-        self.velocity = 0
-        self.solid = False # True если неразрушаемая
-
-    def set_solid(self, s):
-        self.solid = s
-
-    def is_solid(self):
-        return self.solid
-
-class Ball(GameObject):
-    def __init__(self, x, y, tile_size, map_size):
-        GameObject.__init__(self, './resources/ball.png', x, y, tile_size, map_size)
-        self.health = 100
-        self.direction = 0
-        self.velocity = 0
-
-# FIXME картинку для бонуса придумать
-class Bonus(GameObject):
-    def __init__(self, x, y, tile_size, map_size):
-        GameObject.__init__(self, './resources/bonus.png', x, y, tile_size, map_size)
-        self.health = 100
-        self.direction = 0
-        self.velocity = 0
+        self.set_coord(self.x, self.y)
 
 
 def process_events(events, packman):
@@ -320,47 +151,17 @@ if __name__ == '__main__':
     init_window()
     tile_size = 32
     map_size = 16
-    RED = (255,0,0)
-    BLUE = (0,0,255)
-    map = Map(map_size, map_size)
-    # создадим приведение
     ghost = Ghost(0, 0, tile_size, map_size)
-    while not map.set(ghost,random.randint(0,15),random.randint(0,15)): # поищем место чтобы не в стене
-        pass
-    # добавим еще приведение
-    ghost2 = Ghost(0, 0, tile_size, map_size)
-    # перекрасим приведение в синий цвет
-    pxarr = pygame.PixelArray(ghost2.image)
-    pxarr.replace(RED, BLUE,0.5)
-    del pxarr # важно удалять объект PixelArray - иначе не работает дольше
-    while not map.set(ghost2,random.randint(0,15),random.randint(0,15)):
-        pass
-    # создадим пакмана
     pacman = Pacman(5, 5, tile_size, map_size)
-    while not map.set(pacman,random.randint(0,15),random.randint(0,15)):
-        pass
     background = None #pygame.image.load("./resources/background.png")
     screen = pygame.display.get_surface()
 
-    while 1: # здесь основной цикл
+    while 1:
         process_events(pygame.event.get(), pacman)
         pygame.time.delay(100)
         ghost.game_tick()
-        ghost2.game_tick()
         pacman.game_tick()
         draw_background(screen, background)
-        map.draw(screen)
+        pacman.draw(screen)
+        ghost.draw(screen)
         pygame.display.update()
-        if not pacman.is_alive(): # pacman'а сожрали
-            # FIXME - вывести СОЖАЛЕНИЕ
-            pygame.time.delay(3000)
-            break
-        if not ( ghost.is_alive() or ghost2.is_alive() ): # пакман съел привидение
-            # FIXME - вывести ПОЗДРАВЛЕНИЕ
-            pygame.time.delay(3000)
-            break
-        if map.point_count==0 and map.bonus_count==0: # собраны все шары и бонусы
-            # FIXME - вывести ПОЗДРАВЛЕНИЕ Вы собрали всё
-            pygame.time.delay(3000)
-            break
-
